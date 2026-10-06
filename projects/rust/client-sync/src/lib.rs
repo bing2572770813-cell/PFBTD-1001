@@ -1,5 +1,10 @@
 use reqwest::{Method, blocking::Client};
-use serde_json::Value;
+use serde_json::{Value, json};
+
+/// Build the JSON body required by `POST /echo`.
+pub fn echo_body(text: String) -> Value {
+    json!({"text": text})
+}
 
 /// Preserve HTTP status even when the error body is not JSON.
 pub fn exchange(
