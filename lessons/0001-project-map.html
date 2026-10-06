@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 1 课：看懂 Rust 路线地图</title>
+  <link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<main>
+  <div class="eyebrow">PFBTD · Rust 路线 · Lesson 01</div>
+  <h1>先建立地图，再写第一行代码</h1>
+  <p class="lede">这一课的胜利标准很小：你能说清楚三个 crate 各自负责什么，以及为什么我们要在每个目录单独运行 Cargo 命令。</p>
+
+  <h2>1. 你刚刚验证了什么</h2>
+  <div class="card">
+    <p>本机工具链是 Rust <code>1.98.1</code> / Cargo <code>1.98.1</code>。三个项目的起始测试都通过：</p>
+    <ul>
+      <li><code>client-sync</code>：1 个集成测试通过。</li>
+      <li><code>server-sync</code>：7 个业务/HTTP 测试通过。</li>
+      <li><code>server-async</code>：6 个业务/HTTP 测试通过。</li>
+    </ul>
+  </div>
+
+  <h2>2. 三个 crate 的职责</h2>
+  <div class="card">
+    <p><strong>crate</strong> 可以先理解成一个独立的 Rust 包：有自己的 <code>Cargo.toml</code>、锁文件、源码和测试。</p>
+    <ul>
+      <li><strong>client-sync</strong>：命令行用户；负责收集输入、发 HTTP 请求、保存本地 token。</li>
+      <li><strong>server-sync</strong>：同步业务过渡层；先练业务规则、状态和锁，不引入 <code>async/await</code>。</li>
+      <li><strong>server-async</strong>：最终服务端；请求处理异步，但密码计算等阻塞工作必须移出运行时线程。</li>
+    </ul>
+  </div>
+
+  <h2>3. 为什么每个目录单独运行</h2>
+  <p>仓库没有 Cargo workspace。每个 crate 都是独立的依赖图和锁文件；<code>cargo test --locked</code> 要求清单与锁文件一致，避免“今天能编译、换机器就变样”。</p>
+  <blockquote>工作流原则：先改一个小行为 → 写测试 → 跑测试 → 看差异 → 再提交。测试不是最后才做的验收，而是我们每一步的反馈。</blockquote>
+
+  <h2>4. 你的第一个决策</h2>
+  <p>我们可以按两种方式推进：</p>
+  <ol>
+    <li><strong>A：客户端优先（推荐）</strong>。先完成一个真实闭环：输入 → HTTP → 响应 → token；反馈快，能先建立 HTTP 心智模型。</li>
+    <li><strong>B：服务端优先</strong>。先实现协议和状态，再补客户端；适合想先深入 Rust 业务建模的人，但前期反馈较慢。</li>
+  </ol>
+  <p>我推荐 A，因为你的目标是降低认知负荷，同时保留关键决策；先完成一个闭环能让后续每个接口都有参照。</p>
+
+  <h2>5. 30 秒回忆题</h2>
+  <p>不要查资料，直接回答：</p>
+  <ol>
+    <li>哪个 crate 最终必须处理异步请求？</li>
+    <li><code>--locked</code> 主要保护什么？</li>
+    <li>你选择 A 还是 B？为什么？</li>
+  </ol>
+  <p>答完后告诉我你的选择；如果你愿意，也可以直接追问任何一个词。</p>
+  <p><small>主要资料：<a href="https://doc.rust-lang.org/book/">The Rust Programming Language</a>、<a href="https://doc.rust-lang.org/cargo/">The Cargo Book</a>。下一课会围绕你的选择做第一个小功能。</small></p>
+</main>
+</body>
+</html>
