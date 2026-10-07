@@ -98,7 +98,10 @@ fn http_input_and_routing() {
         Status::BadRequest
     );
     assert_eq!(client.get("/missing").dispatch().status(), Status::NotFound);
-    assert_eq!(client.get("/echo").dispatch().status(), Status::NotFound);
+    assert_eq!(
+        client.get("/echo").dispatch().status(),
+        Status::MethodNotAllowed
+    );
     assert_eq!(
         client.patch("/ping").dispatch().status(),
         Status::MethodNotAllowed
@@ -106,7 +109,7 @@ fn http_input_and_routing() {
 }
 
 #[test]
-fn unimplemented_routes_are_absent() {
+fn protected_routes_are_present() {
     use rocket::http::Method;
     let client = Client::tracked(create_app()).unwrap();
     for (method, path) in [
@@ -116,9 +119,27 @@ fn unimplemented_routes_are_absent() {
         (Method::Get, "/texts/note"),
         (Method::Delete, "/texts/note"),
     ] {
+        let request = client.req(method, path);
+        let status = match path {
+            "/echo" => request
+                .header(ContentType::JSON)
+                .body(r#"{"text":"hello"}"#)
+                .dispatch()
+                .status(),
+            "/texts/note" if method == Method::Put => request
+                .header(ContentType::JSON)
+                .body(r#"{"text":"hello"}"#)
+                .dispatch()
+                .status(),
+            _ => request.dispatch().status(),
+        };
         assert_eq!(
-            client.req(method, path).dispatch().status(),
-            Status::NotFound
+            status,
+            if path == "/echo" {
+                Status::Ok
+            } else {
+                Status::Unauthorized
+            }
         );
     }
     for path in [
