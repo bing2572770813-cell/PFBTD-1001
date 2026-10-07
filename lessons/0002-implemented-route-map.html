@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 2 课：从请求到状态</title>
+  <link rel="stylesheet" href="../assets/lesson.css">
+</head>
+<body>
+<main>
+  <div class="eyebrow">PFBTD · Rust 路线 · Lesson 02</div>
+  <h1>从一次请求看懂整个系统</h1>
+  <p class="lede">本次实现已经把客户端、HTTP 适配层和业务状态连成一个可运行闭环。以后排查问题时，可以沿着这条链定位。</p>
+
+  <h2>请求链路</h2>
+  <pre>命令行输入
+  ↓
+client-sync：把命令转换成方法、路径、JSON、Bearer token
+  ↓
+HTTP/1.1
+  ↓
+server-async/http.rs：读取请求、限制请求体、解析 JSON
+  ↓ spawn_blocking
+server-async/lib.rs：校验身份、锁住共享状态、执行业务
+  ↓
+{"data": ...} 或 HTTP 错误状态</pre>
+
+  <h2>已经完成的模块</h2>
+  <ul>
+    <li><strong>客户端输入</strong>：单独一行 <code>.</code> 结束；<code>\.</code> 表示正文中的单独句点；空行和 Unicode 保留。</li>
+    <li><strong>公开接口</strong>：<code>GET /ping</code>、<code>POST /echo</code>、注册和登录。</li>
+    <li><strong>受保护接口</strong>：文本上传、覆盖、读取、列表、删除、退出和注销。</li>
+    <li><strong>身份状态</strong>：每个用户只有一个 Token；重新登录替换旧 Token；注销删除用户和文本。</li>
+    <li><strong>过期</strong>：默认 300 秒，可用 <code>--token-ttl-seconds</code> 配置；过期不会被普通操作续期。</li>
+    <li><strong>并发</strong>：<code>Mutex</code> 保护用户表；登录计算密码时不持有锁；异步服务端用 <code>spawn_blocking</code> 隔离 PBKDF2。</li>
+  </ul>
+
+  <h2>三个重要设计理由</h2>
+  <ol>
+    <li>先把业务放在 <code>lib.rs</code>，让它可以脱离网络直接测试；HTTP 层只负责适配。</li>
+    <li>Token 检查、文本操作和注销在同一把状态锁的保护下完成，避免检查通过后被另一个请求插入中间态。</li>
+    <li>登录先复制盐、摘要和账号代数，释放锁后计算密码，再回来确认代数仍相同；这样注销并同名重注册不会让旧登录写入新账号。</li>
+  </ol>
+
+  <h2>验证命令</h2>
+  <pre>cd projects/rust/client-sync
+cargo fmt -- --check
+cargo check --locked
+cargo clippy --locked --all-targets -- -D warnings
+cargo test --locked
+cargo build --release --locked</pre>
+  <p>同步服务端和异步服务端目录分别执行同样的命令。遇到错误时，先看它属于客户端、HTTP 适配、业务状态还是异步边界。</p>
+
+  <p><small>主要资料：<a href="https://doc.rust-lang.org/book/">The Rust Programming Language</a>、<a href="https://rocket.rs/guide/v0.5/">Rocket Guide</a>、<a href="https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html">Tokio spawn_blocking</a>。下一轮可继续补并发回归测试或整理提交历史。</small></p>
+</main>
+</body>
+</html>
