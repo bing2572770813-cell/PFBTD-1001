@@ -1,5 +1,6 @@
 use clap::Parser;
 use reqwest::blocking::Client;
+use rm_client_sync::{echo_body, exchange, multiline_text};
 use serde_json::{Value, json};
 use std::io::{self, Write};
 use std::time::Duration;
@@ -9,6 +10,7 @@ struct Args {
     #[arg(long, default_value = "http://127.0.0.1:7878")]
     url: String,
 }
+
 fn input(prompt: &str) -> io::Result<String> {
     print!("{prompt}");
     io::stdout().flush()?;
@@ -18,6 +20,21 @@ fn input(prompt: &str) -> io::Result<String> {
     }
     Ok(line.trim_end_matches(['\r', '\n']).to_owned())
 }
+
+fn multiline_input() -> io::Result<String> {
+    println!("Enter text line by line; `.` ends input and `\\.` means a literal `.` line.");
+    let mut lines = Vec::new();
+    loop {
+        let line = input("text> ")?;
+        let done = line == ".";
+        lines.push(line);
+        if done {
+            break;
+        }
+    }
+    Ok(multiline_text(lines))
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
     let client = Client::builder()
@@ -34,39 +51,60 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Err(error) if error.kind() == io::ErrorKind::UnexpectedEof => break,
             Err(error) => return Err(error.into()),
         };
-        let mut body = Value::Null;
-        let (method, path) = match command.as_str() {
+        let (method, path, body): (&str, String, Option<Value>) = match command.as_str() {
             "q" => break,
-            "ping" => ("GET", "/ping"),
-            "list" => ("GET", "/texts"),
-            "logout" => ("DELETE", "/sessions/current"),
+            "ping" => ("GET", "/ping".to_owned(), None),
+            "list" => ("GET", "/texts".to_owned(), None),
+            "logout" => ("DELETE", "/sessions/current".to_owned(), None),
+            "delete-user" => ("DELETE", "/users/me".to_owned(), None),
+            "echo" => (
+                "POST",
+                "/echo".to_owned(),
+                Some(echo_body(multiline_input()?)),
+            ),
             "register" | "login" => {
-                body = json!({"username": input("username: ")?, "password": rpassword::prompt_password("password: ")?});
+                let body = json!({
+                    "username": input("username: ")?,
+                    "password": rpassword::prompt_password("password: ")?,
+                });
                 (
                     "POST",
                     if command == "register" {
-                        "/users"
+                        "/users".to_owned()
                     } else {
-                        "/sessions"
+                        "/sessions".to_owned()
                     },
+                    Some(body),
                 )
             }
-            "echo" | "delete-user" | "put" | "get" | "delete" => {
-                println!("This task is not implemented in the starting code yet.");
-                continue;
+            "put" => {
+                let name = input("name: ")?;
+                (
+                    "PUT",
+                    format!("/texts/{name}"),
+                    Some(echo_body(multiline_input()?)),
+                )
+            }
+            "get" | "delete" => {
+                let name = input("name: ")?;
+                (
+                    if command == "get" { "GET" } else { "DELETE" },
+                    format!("/texts/{name}"),
+                    None,
+                )
             }
             _ => {
                 println!("Unknown command.");
                 continue;
             }
         };
-        let result = rm_client_sync::exchange(
+        let result = exchange(
             &client,
             &args.url,
             method.parse().unwrap(),
-            path,
+            &path,
             &token,
-            if body.is_null() { None } else { Some(&body) },
+            body.as_ref(),
         );
         match result {
             Ok((status, value)) => {
@@ -80,7 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 if status == 401 {
                     println!("Please log in again.");
                 }
-                if status == 401 || (command == "logout" && status == 200) {
+                if status == 401
+                    || ((command == "logout" || command == "delete-user") && status == 200)
+                {
                     token.clear();
                 }
             }

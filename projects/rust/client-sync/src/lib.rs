@@ -6,6 +6,24 @@ pub fn echo_body(text: String) -> Value {
     json!({"text": text})
 }
 
+/// Turn lines entered with `.` as the terminator into one text value.
+/// `\.` represents a literal line containing a period.
+pub fn multiline_text<I>(lines: I) -> String
+where
+    I: IntoIterator<Item = String>,
+{
+    lines
+        .into_iter()
+        .take_while(|line| line != ".")
+        .map(|line| match line.as_str() {
+            "\\." => ".".to_owned(),
+            "\\\\" => "\\".to_owned(),
+            _ => line,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Preserve HTTP status even when the error body is not JSON.
 pub fn exchange(
     client: &Client,
