@@ -1,5 +1,6 @@
 use rm_server_async::Service;
 use serde_json::{Value, json};
+use std::time::{Duration, Instant};
 
 #[test]
 fn input_validation_and_baseline() {
@@ -127,4 +128,22 @@ fn account_deletion_revokes_token_and_data() {
         service.handle("GET", "/texts", &Value::Null, &format!("Bearer {fresh}")),
         (200, json!({"data":[]}))
     );
+}
+
+#[test]
+fn token_expires_without_being_refreshed() {
+    let service = Service::with_token_ttl(Duration::from_secs(1));
+    let account = json!({"username":"alice","password":"password1"});
+    service.handle("POST", "/users", &account, "");
+    let login = service.handle("POST", "/sessions", &account, "").1;
+    assert_eq!(login["data"]["expires_in"], 1);
+    let token = login["data"]["token"].as_str().unwrap().to_owned();
+    let auth = format!("Bearer {token}");
+    assert_eq!(service.handle("GET", "/texts", &Value::Null, &auth).0, 200);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while Instant::now() < deadline && service.handle("GET", "/texts", &Value::Null, &auth).0 == 200
+    {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    assert_eq!(service.handle("GET", "/texts", &Value::Null, &auth).0, 401);
 }

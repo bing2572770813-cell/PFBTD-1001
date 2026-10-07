@@ -230,7 +230,7 @@ impl Service {
             user.token_expires_at = Some(Instant::now() + self.token_ttl);
             return (
                 200,
-                json!({"data":{"token":token,"expires_in":self.token_ttl.as_secs()}}),
+                json!({"data":{"token":token,"expires_in":self.token_ttl.as_secs().max(1)}}),
             );
         }
 
